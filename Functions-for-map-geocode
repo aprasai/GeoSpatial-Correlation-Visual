@@ -1,0 +1,91 @@
+def geo_code_addr(list_of_Address):
+    try:
+        mapquestKey = 'API KEY REQUIRED'
+        g = geocoder.mapquest(list_of_Address, method='batch', key = mapquestKey)
+        results = pd.DataFrame()
+        c = 0
+        for result in g:
+            inputAddr = list_of_Address[c]#.values
+            city = result.city
+            latLong = result.latlng
+            country = result.country
+            address = result.address
+            results = results.append(pd.DataFrame([inputAddr, 
+                                                   address, 
+                                                   city, 
+                                                   country, 
+                                                   latLong[1], 
+                                                   latLong[0]]).transpose())
+            c = c+1
+
+        results.columns = ['InputAddress',
+                           'Address', 
+                           'City', 
+                           'CountryCode', 
+                           'Latitude', 
+                           'Longitude']
+
+        #Scrapping the ISO code mapping from wikipedia
+        isoCountry = pd.read_html('https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2')[2].iloc[1:,0:2]
+        isoCountry.columns= ['Code', 'CountryName']
+        results = results.merge(isoCountry, 
+                                left_on = 'CountryCode', 
+                                right_on = 'Code', 
+                                how = 'inner')
+        
+        results = results.drop(columns = ['Code'])
+        return(results)
+    except Exception as ex:
+        print ('Please check your inputs again for the following error:')
+        print (ex)
+        
+        
+        
+
+def world_map(data_bubble, data_heat,heat=True):
+    # Make an empty map
+    m = folium.Map([42.5, -75.5], 
+                   tiles='OpenStreetMap', 
+                   zoom_start=4, 
+                   world_copy_jump=True,
+                   control_scale=True)
+
+    for i in range(0,len(data_bubble)):
+        # Add Bubbles one by one
+        folium.Circle(location=[data_bubble['Longitude'][i], data_bubble['Latitude'][i]],
+                      popup='Information you to Display',
+                      radius= 2,
+                      weight = .5,
+                      color='black',
+                      fill=True,
+                      fill_color=data_bubble['Color'][i],
+                      fill_opacity = .85
+                     ).add_to(m)
+        
+        #Code to get marker instead of bubble based on cities
+        #folium.Marker(location=[data_bubble['Longitude'][i], data_bubble['Latitude'][i]],
+        #              popup='Information you to Display',
+        #              icon = folium.Icon(color='blue')).add_to(m)
+    
+    #overlaying with heatmap to compare the relationship
+    if heat == True:
+        for_map = data_heat[['City',
+                             'Latitude',
+                             'Longitude',
+                             'Heat_Determinant_Number']]
+
+        max_amount = float(for_map['Heat_Number'].max())
+        hm_wide = HeatMap( list(zip(for_map['Longitude'].values,
+                                    for_map['Latitude'].values, 
+                                    for_map['Heat_Determinant_Number'].values*5)),
+                           min_opacity=0.1,
+                           max_val=max_amount,
+                           radius=20, blur=15, 
+                           max_zoom=1, 
+                         )
+
+
+        m.add_child(hm_wide)
+    m.save('mymap.html')
+    webbrowser.open('mymap.html')
+    return
